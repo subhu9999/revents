@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
-import { incrementCounter, decrementCounter } from "./testActions";
+import { incrementAsync, decrementAsync } from "./testActions";
 import { Button } from "semantic-ui-react";
 
 //react places autocomplete
@@ -13,12 +13,13 @@ import PlacesAutocomplete, {
 //modals
 import { openModal } from "../modals/modalActions";
 const mapStateToProps = state => ({
-  data: state.test.data
+  data: state.test.data,
+  loading: state.test.loading
 });
 
 const actions = {
-  incrementCounter,
-  decrementCounter,
+  incrementAsync,
+  decrementAsync,
   openModal
 };
 
@@ -48,7 +49,13 @@ class TestComponent extends Component {
       onChange: this.onChange
     };
 
-    const { data, incrementCounter, decrementCounter, openModal } = this.props;
+    const {
+      data,
+      incrementAsync,
+      decrementAsync,
+      openModal,
+      loading
+    } = this.props;
     return (
       <div>
         <Script
@@ -57,10 +64,10 @@ class TestComponent extends Component {
         />
         <h1>Test Area</h1>
         <h3>Answer is {data} </h3>
-        <Button onClick={incrementCounter} color="green">
+        <Button loading={loading} onClick={incrementAsync} color="green">
           Increment
         </Button>
-        <Button onClick={decrementCounter} color="red">
+        <Button loading={loading} onClick={decrementAsync} color="red">
           Decrement
         </Button>
 
