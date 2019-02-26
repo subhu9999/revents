@@ -3,9 +3,9 @@
 import React, { Component } from "react";
 import { Segment, Form, Button, Grid, Header } from "semantic-ui-react";
 import { connect } from "react-redux";
-import { createEvent, updateEvent } from "../eventActions";
+import { withFirestore } from "react-redux-firebase";
+import { createEvent, updateEvent, cancelToggle } from "../eventActions";
 import { geocodeByAddress, getLatLng } from "react-places-autocomplete";
-import cuid from "cuid";
 import { reduxForm, Field } from "redux-form";
 import {
   composeValidators,
@@ -17,30 +17,29 @@ import TextInput from "../../../app/common/form/TextInput";
 import TextArea from "../../../app/common/form/TextArea";
 import SelectInput from "../../../app/common/form/SelectInput";
 import DateInput from "../../../app/common/form/DateInput";
-import moment from "moment";
 import PlaceInput from "../../../app/common/form/PlaceInput";
 
 //to remove google is not defined error
 import Script from "react-load-script";
 
-const mapState = (state, ownProps) => {
-  const eventId = ownProps.match.params.id;
-
+const mapState = state => {
   let event = {};
 
-  if (eventId && state.events.length > 0) {
-    event = state.events.filter(event => event.id === eventId)[0];
+  if (state.firestore.ordered.events && state.firestore.ordered.events[0]) {
+    event = state.firestore.ordered.events[0];
   }
 
   return {
     //another property of redux form
-    initialValues: event
+    initialValues: event,
+    event: event
   };
 };
 
 const actions = {
   createEvent,
-  updateEvent
+  updateEvent,
+  cancelToggle
 };
 
 const category = [
@@ -74,6 +73,21 @@ class EventForm extends Component {
     scriptLoaded: false
   };
 
+  async componentDidMount() {
+    const { firestore, match } = this.props;
+    //firestore.get() -> does not provide real-time data - we need to reload the page to do so
+    //let event = await firestore.get(`events/${match.params.id}`);
+
+    //firestore.setListener() -> provides real-time data - no need to reload page - warning - you need to unSet the listener in componentWillUnmount if you set listener in componendidMount
+    await firestore.setListener(`events/${match.params.id}`);
+  }
+
+  async componentWillUnmount() {
+    //no need to do if we user firestoreConnect
+    const { firestore, match } = this.props;
+    await firestore.unsetListener(`events/${match.params.id}`);
+  }
+
   handleScriptLoaded = () => this.setState({ scriptLoaded: true });
 
   handleCitySelect = selectedCity => {
@@ -105,33 +119,28 @@ class EventForm extends Component {
   };
 
   onFormSubmit = values => {
-    //converting the date to react acceptable format
-    values.date = moment(values.date).format();
     values.venueLatLng = this.state.venueLatLng;
 
     if (this.props.initialValues.id) {
+      //if latlng is empty
+      if (Object.keys(values.venueLatLng).length === 0) {
+        values.venueLatLng = this.props.event.venueLatLng;
+      }
       this.props.updateEvent(values);
       this.props.history.goBack();
     } else {
-      const newEvent = {
-        ...values,
-        id: cuid(),
-        hostPhotoURL: "/assets/user.png",
-        hostedBy: "Bob"
-      };
-
-      this.props.createEvent(newEvent);
+      this.props.createEvent(values);
       this.props.history.push("/events");
     }
   };
 
   //the form data is pristine if the user comes to update & dont make any changes
   render() {
-    const { invalid, submitting, pristine } = this.props;
+    const { event, invalid, submitting, pristine, cancelToggle } = this.props;
     return (
       <Grid>
         <Script
-          url="https://maps.googleapis.com/maps/api/js?key=AIzaSyDcYqem9sucUc4l-7dkSzKFcU6pPI5hvH4&libraries=places"
+          url="https://maps.googleapis.com/maps/api/js?key=AIzaSyBnSmFZH3oKeSGQ-KuDFVh_QHpboE4GJH8&libraries=places"
           onLoad={this.handleScriptLoaded}
         />
         <Grid.Column width={10}>
@@ -206,6 +215,13 @@ class EventForm extends Component {
               <Button onClick={this.props.history.goBack} type="button">
                 Cancel
               </Button>
+              <Button
+                onClick={() => cancelToggle(!event.cancelled, event.id)}
+                type="button"
+                color={event.cancelled ? "green" : "red"}
+                content={event.cancelled ? "Reactivate Event" : "Cancel Event"}
+                floated="right"
+              />
             </Form>
           </Segment>
         </Grid.Column>
@@ -214,12 +230,14 @@ class EventForm extends Component {
   }
 }
 
-export default connect(
-  mapState,
-  actions
-)(
-  reduxForm({ form: "eventForm", enableReinitialize: true, validate })(
-    EventForm
+export default withFirestore(
+  connect(
+    mapState,
+    actions
+  )(
+    reduxForm({ form: "eventForm", enableReinitialize: true, validate })(
+      EventForm
+    )
   )
 );
 

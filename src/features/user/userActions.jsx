@@ -6,6 +6,8 @@ import {
   asyncActionFinish,
   asyncActionError
 } from "../async/asyncActions";
+import { FETCH_EVENTS } from "../event/eventConstants";
+import firebase from "../../app/config/firebase";
 
 export const updateProfile = user => async (
   dispatch,
@@ -115,5 +117,116 @@ export const setMainPhoto = photo => async (
   } catch (error) {
     console.log(error);
     throw new Error("Problem Setting Main Photo");
+  }
+};
+
+export const goingToEvent = event => async (
+  dispatch,
+  getState,
+  { getFirestore }
+) => {
+  const firestore = getFirestore();
+  const user = firestore.auth().currentUser;
+  const photoURL = getState().firebase.profile.photoURL;
+  const attendee = {
+    going: true,
+    joinDate: Date.now(),
+    photoURL: photoURL || "/assets/user.png",
+    displayName: user.displayName,
+    host: false
+  };
+  try {
+    await firestore.update(`events/${event.id}`, {
+      [`attendees.${user.uid}`]: attendee
+    });
+    await firestore.set(`event_attendee/${event.id}_${user.uid}`, {
+      eventId: event.id,
+      userUid: user.uid,
+      eventDate: event.date,
+      host: false
+    });
+    toastr.success("Success", "You have signed up to the event");
+  } catch (error) {
+    console.log(error);
+    toastr.error("Oops", "Problem signing up to event");
+  }
+};
+
+export const cancelGoingToEvent = event => async (
+  dispatch,
+  getState,
+  { getFirestore }
+) => {
+  const firestore = getFirestore();
+  const user = firestore.auth().currentUser;
+  try {
+    await firestore.update(`events/${event.id}`, {
+      //deleting a single filed from firestore doc
+      [`attendees.${user.uid}`]: firestore.FieldValue.delete()
+    });
+
+    //removing attendee data from lookup
+    await firestore.delete(`event_attendee/${event.id}_${user.uid}`);
+    toastr.success("Success", "You have removed yourself from event");
+  } catch (error) {
+    console.log(error);
+    toastr.error("oops", "something went wrong");
+  }
+};
+
+export const getUserEvents = (userUid, activeTab) => async (
+  dispatch,
+  getState
+) => {
+  dispatch(asyncActionStart());
+  const firestore = firebase.firestore();
+  const today = new Date(Date.now());
+  let eventsRef = firestore.collection("event_attendee");
+  let query;
+  switch (activeTab) {
+    case 1: //past events
+      query = eventsRef
+        .where("userUid", "==", userUid)
+        .where("eventDate", "<=", today)
+        .orderBy("eventDate", "desc");
+      break;
+    case 2: //future events
+      query = eventsRef
+        .where("userUid", "==", userUid)
+        .where("eventDate", ">=", today)
+        .orderBy("eventDate");
+      break;
+    case 3: //hosted events
+      query = eventsRef
+        .where("userUid", "==", userUid)
+        .where("host", "==", true)
+        .orderBy("eventDate", "desc");
+      break;
+    default:
+      query = eventsRef
+        .where("userUid", "==", userUid)
+        .orderBy("eventDate", "desc");
+  }
+
+  try {
+    let querySnap = await query.get();
+    let events = [];
+
+    //retrieving the actual data
+    for (let i = 0; i < querySnap.docs.length; i++) {
+      let evt = await firestore
+        .collection("events")
+        .doc(querySnap.docs[i].data().eventId)
+        .get();
+
+      events.push({ ...evt.data(), id: evt.id });
+    }
+
+    dispatch({ type: FETCH_EVENTS, payload: { events } });
+
+    dispatch(asyncActionFinish());
+  } catch (error) {
+    console.log(error);
+    dispatch(asyncActionError());
   }
 };
