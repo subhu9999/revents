@@ -32,7 +32,8 @@ const mapState = state => {
   return {
     //another property of redux form
     initialValues: event,
-    event: event
+    event: event,
+    loading: state.async.loading
   };
 };
 
@@ -118,7 +119,7 @@ class EventForm extends Component {
       });
   };
 
-  onFormSubmit = values => {
+  onFormSubmit = async values => {
     values.venueLatLng = this.state.venueLatLng;
 
     if (this.props.initialValues.id) {
@@ -126,7 +127,7 @@ class EventForm extends Component {
       if (Object.keys(values.venueLatLng).length === 0) {
         values.venueLatLng = this.props.event.venueLatLng;
       }
-      this.props.updateEvent(values);
+      await this.props.updateEvent(values);
       this.props.history.goBack();
     } else {
       this.props.createEvent(values);
@@ -136,7 +137,14 @@ class EventForm extends Component {
 
   //the form data is pristine if the user comes to update & dont make any changes
   render() {
-    const { event, invalid, submitting, pristine, cancelToggle } = this.props;
+    const {
+      loading,
+      event,
+      invalid,
+      submitting,
+      pristine,
+      cancelToggle
+    } = this.props;
     return (
       <Grid>
         <Script
@@ -206,13 +214,18 @@ class EventForm extends Component {
               />
 
               <Button
+                loading={loading}
                 disabled={invalid || submitting || pristine}
                 positive
                 type="submit"
               >
                 Submit
               </Button>
-              <Button onClick={this.props.history.goBack} type="button">
+              <Button
+                disabled={loading}
+                onClick={this.props.history.goBack}
+                type="button"
+              >
                 Cancel
               </Button>
               <Button

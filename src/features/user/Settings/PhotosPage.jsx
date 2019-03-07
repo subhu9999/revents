@@ -194,6 +194,7 @@ class PhotosPage extends Component {
                     onClick={this.handleSetMainPhoto(photo)}
                     basic
                     color="green"
+                    loading={loading}
                   >
                     Main
                   </Button>
